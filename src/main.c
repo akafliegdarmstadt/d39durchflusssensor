@@ -14,18 +14,20 @@
 #define SENSOR_THREAD_STACK_SIZE 500
 #define SENSOR_THREAD_PRIORITY 5
 
-extern void my_entry_point(void *, void *, void *);
+void timer_handler(struct k_timer *dummy);
 
-K_THREAD_STACK_DEFINE(sensor_stack_area, SENSOR_THREAD_STACK_SIZE);
-struct k_thread sensor_thread_data;
+
+K_TIMER_DEFINE(update_timer, timer_handler, NULL);
 
 void main(void)
 {
-	k_tid_t sensor_thread_id = k_thread_create(&sensor_thread_data, sensor_stack_area,
-										   K_THREAD_STACK_SIZEOF(sensor_stack_area),
-										   my_entry_point,
-										   NULL, NULL, NULL,
-										   SENSOR_THREAD_PRIORITY, 0, K_NO_WAIT);
-	int a = (int) sensor_thread_id;
-	printk("Hello World! %s\n %d", CONFIG_BOARD, a);
+
+	printk("Hello World! %s\n %d\n", CONFIG_BOARD, 1);
+
+	k_timer_start(&update_timer, K_SECONDS(1), K_SECONDS(1));
+}
+
+void timer_handler(struct k_timer *dummy) {
+	printk("Hallololo\n");
+	printk("Hallololo\n");
 }
