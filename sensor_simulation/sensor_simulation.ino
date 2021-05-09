@@ -7,6 +7,9 @@ static const uint32_t cCalibrationFaktor = 8600; // [ticks/liter]
 static const uint32_t cTimerFreq = cCpuFreq / cPrescaleFactor; // [Hz]
 static const float cDutyCicle = 0.10;
 
+volatile uint16_t top; // PWM TOP value
+volatile uint16_t compare; // PWM compare value
+
 /*
  * Setup routine, executed once at startup
  */
@@ -32,6 +35,8 @@ void setup() {
    */
   Serial.begin(9600);
   Serial.println("Hello World!");
+
+  sei(); // global interrupt enable
 }
 
 /*
@@ -48,6 +53,19 @@ void loop() {
  */
 void serialEvent() {
   setFuelFlow(Serial.parseFloat(), true);
+}
+
+/*
+ * Interrupt Service Routine for the Timer/Counter1 Overflow
+ * 
+ * In this ISR the PWM values get set.
+ */
+ISR(TIMER1_OVF_vect, ISR_BLOCK) {
+  ICR1 = top;
+  OCR1A = compare;
+
+  TIMSK1 &= 0b11111110; // clear TOIE1 (Timer/Counter1, Overflow Interrupt Enable) bit
+  // the setFuelFlow() function sets the TOIE1 bit (enabling this ISR) again if the values have changed
 }
 
 /*
@@ -70,18 +88,23 @@ void setFuelFlow(float fuel_flow, bool verbose) {
     Serial.println("Error: Can't set so low fuel flow!");
   } else {
     float PwmFreq = (fuel_flow * cCalibrationFaktor) / 3600; // [Hz] the needed PMW frequency
-    float top = cTimerFreq / PwmFreq; // PWM TOP value
+    float top_f = cTimerFreq / PwmFreq; // PWM TOP value
   
-    ICR1 = (uint16_t)top;
-    OCR1A = (uint16_t)(top * cDutyCicle);
-
-    if (pwm_off) {
-      TCCR1B |= CLOCK_SELECT_MASK; // set clock sources to start PWM
-      pwm_off = false;
-    }
+  	top = (uint16_t)top_f;
+  	compare = (uint16_t)(top_f * cDutyCicle);
   
+  	if (pwm_off) {
+        ICR1 = top;
+        OCR1A = compare;
+  
+        TCCR1B |= CLOCK_SELECT_MASK; // set clock sources to start PWM
+        pwm_off = false;
+  	} else {
+        TIMSK1 |= 0b00000001; // set TOIE bit to write the new values after the next TC overflow (->ISR)
+  	}
+    
     if (verbose) {
-      String msg = "Set new fuel flow (" + String(fuel_flow) + " liter" + " -> " + String(PwmFreq) + " Hz, PWM: " + ICR1 + "/" + OCR1A + ")";
+      String msg = "Set new fuel flow (" + String(fuel_flow) + " liter" + " -> " + String(PwmFreq) + " Hz, PWM: " + top + "/" + compare + ")";
       Serial.println(msg);
     }
   }
