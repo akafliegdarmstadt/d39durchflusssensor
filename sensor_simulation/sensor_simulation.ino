@@ -1,5 +1,6 @@
 #include <inttypes.h>
 
+#define CLOCK_SELECT_MASK 0b00000100;
 static const uint32_t cPrescaleFactor = 256;
 static const uint32_t cCpuFreq = 16000000; // [Hz]
 static const uint32_t cCalibrationFaktor = 8600; // [ticks/liter]
@@ -21,7 +22,7 @@ void setup() {
    * - CS1[2-0] from prescaler: clk/256 (update cPrescaleFactor on change)
    */
   TCCR1A = 0b10000010;
-  TCCR1B = 0b00011100;
+  TCCR1B = 0b00011000 | CLOCK_SELECT_MASK;
 
   ICR1 = 2717; // set PWM TOP value -> 23 Hz
   OCR1A = (2717 * cDutyCicle) / 100; // set duty cicle -> 10%
@@ -56,14 +57,30 @@ void serialEvent() {
  * @param verbose if set a debug message gets written to the Serial
  */
 void setFuelFlow(uint32_t fuel_flow, bool verbose) {
-  uint32_t PwmFreq = (fuel_flow * cCalibrationFaktor) / 3600; // [Hz] the needed PMW frequency
-  uint16_t top = cTimerFreq / PwmFreq; // PWM TOP value
+  static bool pwm_off = false;
+  
+  if (fuel_flow == 0) {
+    TCCR1B &= 0b11111000; // clear CS (clock Source) bits to stop PWM
+    pwm_off = true;
 
-  ICR1 = top;
-  OCR1A = (top * cDutyCicle) / 100;
+    if (verbose) {
+      Serial.println("Turn fuel flow off");
+    }
+  } else {
+    uint32_t PwmFreq = (fuel_flow * cCalibrationFaktor) / 3600; // [Hz] the needed PMW frequency
+    uint16_t top = cTimerFreq / PwmFreq; // PWM TOP value
+  
+    ICR1 = top;
+    OCR1A = (top * cDutyCicle) / 100;
 
-  if (verbose) {
-    String msg = "Set new fuel flow (" + String(fuel_flow) + " liter" + " -> " + String(PwmFreq) + " Hz)";
-    Serial.println(msg);
+    if (pwm_off) {
+      TCCR1B |= CLOCK_SELECT_MASK; // set clock sources to start PWM
+      pwm_off = false;
+    }
+  
+    if (verbose) {
+      String msg = "Set new fuel flow (" + String(fuel_flow) + " liter" + " -> " + String(PwmFreq) + " Hz)";
+      Serial.println(msg);
+    }
   }
 }
