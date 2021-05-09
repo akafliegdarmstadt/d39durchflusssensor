@@ -5,7 +5,7 @@ static const uint32_t cPrescaleFactor = 256;
 static const uint32_t cCpuFreq = 16000000; // [Hz]
 static const uint32_t cCalibrationFaktor = 8600; // [ticks/liter]
 static const uint32_t cTimerFreq = cCpuFreq / cPrescaleFactor; // [Hz]
-static const uint32_t cDutyCicle = 10; // [%]
+static const float cDutyCicle = 0.10;
 
 /*
  * Setup routine, executed once at startup
@@ -25,7 +25,7 @@ void setup() {
   TCCR1B = 0b00011000 | CLOCK_SELECT_MASK;
 
   ICR1 = 2717; // set PWM TOP value -> 23 Hz
-  OCR1A = (2717 * cDutyCicle) / 100; // set duty cicle -> 10%
+  OCR1A = 2717 * cDutyCicle; // set duty cicle -> 10%
 
   /*
    * init Serial
@@ -47,7 +47,7 @@ void loop() {
  * function that gets called after received a Serial message
  */
 void serialEvent() {
-  setFuelFlow(Serial.parseInt(), true);
+  setFuelFlow(Serial.parseFloat(), true);
 }
 
 /*
@@ -56,7 +56,7 @@ void serialEvent() {
  * @param fuel_flow The fuel flow level the pwm output should simulate in liter/hour
  * @param verbose if set a debug message gets written to the Serial
  */
-void setFuelFlow(uint32_t fuel_flow, bool verbose) {
+void setFuelFlow(float fuel_flow, bool verbose) {
   static bool pwm_off = false;
   
   if (fuel_flow == 0) {
@@ -66,12 +66,14 @@ void setFuelFlow(uint32_t fuel_flow, bool verbose) {
     if (verbose) {
       Serial.println("Turn fuel flow off");
     }
+  } else if (fuel_flow < 0.4) { // the top value does not fit into 16-bit anymore
+    Serial.println("Error: Can't set so low fuel flow!");
   } else {
-    uint32_t PwmFreq = (fuel_flow * cCalibrationFaktor) / 3600; // [Hz] the needed PMW frequency
-    uint16_t top = cTimerFreq / PwmFreq; // PWM TOP value
+    float PwmFreq = (fuel_flow * cCalibrationFaktor) / 3600; // [Hz] the needed PMW frequency
+    float top = cTimerFreq / PwmFreq; // PWM TOP value
   
-    ICR1 = top;
-    OCR1A = (top * cDutyCicle) / 100;
+    ICR1 = (uint16_t)top;
+    OCR1A = (uint16_t)(top * cDutyCicle);
 
     if (pwm_off) {
       TCCR1B |= CLOCK_SELECT_MASK; // set clock sources to start PWM
@@ -79,7 +81,7 @@ void setFuelFlow(uint32_t fuel_flow, bool verbose) {
     }
   
     if (verbose) {
-      String msg = "Set new fuel flow (" + String(fuel_flow) + " liter" + " -> " + String(PwmFreq) + " Hz)";
+      String msg = "Set new fuel flow (" + String(fuel_flow) + " liter" + " -> " + String(PwmFreq) + " Hz, PWM: " + ICR1 + "/" + OCR1A + ")";
       Serial.println(msg);
     }
   }
