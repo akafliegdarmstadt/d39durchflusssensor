@@ -15,20 +15,20 @@ volatile uint16_t compare; // PWM compare value
  */
 void setup() {
   /*
-   * configure 16-bit Timer/Counter1 for PWM output on pin PB1 (OC1A)
+   * configure 16-bit Timer/Counter1 for PWM output on pin PB2 (OC1B)
    */
-  pinMode(9, OUTPUT);
+  pinMode(10, OUTPUT);
 
   /*
-   * - COM1A[1-0] clear on compare match, set at BOTTOM (non-inverting mode)
-   * - WGM1[3-0] Fast PWM with TOP at ICR1
+   * - COM1B[1-0] clear on compare match, set at BOTTOM (non-inverting mode)
+   * - WGM1[3-0] Fast PWM with TOP at OCR1A
    * - CS1[2-0] from prescaler: clk/256 (update cPrescaleFactor on change)
    */
-  TCCR1A = 0b10000010;
+  TCCR1A = 0b00100011;
   TCCR1B = 0b00011000 | CLOCK_SELECT_MASK;
 
-  ICR1 = 2717; // set PWM TOP value -> 23 Hz
-  OCR1A = 2717 * cDutyCicle; // set duty cicle -> 10%
+  OCR1A = 2717; // set PWM TOP value -> 23 Hz
+  OCR1B = (uint16_t)(2717 * cDutyCicle); // set duty cicle -> 10%
 
   /*
    * init Serial
@@ -56,32 +56,32 @@ void serialEvent() {
 }
 
 /*
- * Interrupt Service Routine for the Timer/Counter1 Overflow
+ * Interrupt Service Routine for the Timer/Counter1 Compare Match B
  * 
  * In this ISR the PWM values get set.
  */
-ISR(TIMER1_OVF_vect, ISR_BLOCK) {
-  ICR1 = top;
-  OCR1A = compare;
+ISR(TIMER1_COMPB_vect) {
+  OCR1A = top;
+  OCR1B = compare;
 
-  TIMSK1 &= 0b11111110; // clear TOIE1 (Timer/Counter1, Overflow Interrupt Enable) bit
-  // the setFuelFlow() function sets the TOIE1 bit (enabling this ISR) again if the values have changed
+  TIMSK1 &= 0b11111011; // clear OCIE1B (Timer/Counter1, Output Compare B Match Interrupt Enable) bit
+  // the setFuelFlow() function sets the OCIE1B bit (enabling this ISR) again if the values have changed
 }
 
 /*
  * Update the PWM parameter to simulate the given fuel flow.
  * 
  * @param fuel_flow The fuel flow level the pwm output should simulate in liter/hour
- * @param verbose if set a debug message gets written to the Serial
+ * @param verbose_out if set a debug message gets written to the Serial
  */
-void setFuelFlow(float fuel_flow, bool verbose) {
+void setFuelFlow(float fuel_flow, bool verbose_out) {
   static bool pwm_off = false;
   
   if (fuel_flow == 0) {
     TCCR1B &= 0b11111000; // clear CS (clock Source) bits to stop PWM
     pwm_off = true;
 
-    if (verbose) {
+    if (verbose_out) {
       Serial.println("Turn fuel flow off");
     }
   } else if (fuel_flow < 0.4) { // the top value does not fit into 16-bit anymore
@@ -94,16 +94,16 @@ void setFuelFlow(float fuel_flow, bool verbose) {
   	compare = (uint16_t)(top_f * cDutyCicle);
   
   	if (pwm_off) {
-        ICR1 = top;
-        OCR1A = compare;
+        OCR1A = top;
+        OCR1B = compare;
   
         TCCR1B |= CLOCK_SELECT_MASK; // set clock sources to start PWM
         pwm_off = false;
   	} else {
-        TIMSK1 |= 0b00000001; // set TOIE bit to write the new values after the next TC overflow (->ISR)
+        TIMSK1 |= 0b00000100; // set OCIE1B bit to write the new values after the next compare (->ISR)
   	}
     
-    if (verbose) {
+    if (verbose_out) {
       String msg = "Set new fuel flow (" + String(fuel_flow) + " liter" + " -> " + String(PwmFreq) + " Hz, PWM: " + top + "/" + compare + ")";
       Serial.println(msg);
     }
