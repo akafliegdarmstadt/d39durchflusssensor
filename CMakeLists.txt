@@ -1,7 +1,7 @@
 # Find Zephyr. This also loads Zephyr's build system.
 cmake_minimum_required(VERSION 3.13.1)
 
-option(TESTS "Run tests in test/" ON)
+option(TESTS "Run tests in test/" OFF)
 
 set(BOARD esp32)
 
