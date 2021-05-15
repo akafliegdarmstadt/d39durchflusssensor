@@ -5,6 +5,8 @@ Touring Motor Glider D-39.
 
 ## Concept
 
+![overview](overview.drawio.svg)
+
 The actual sensor outputs a square wave whose frequency corresponds to fuel-flow.
 
 We use a ESP32 to read the sensor and present the data as an NMEA-Sentence over Bluetooth LE.
@@ -37,3 +39,15 @@ ninja flash
 ```
 
 Otherwise the esp device path has to be set during build.
+
+## Build and run tests
+
+Enable test specific parts of zephyr in prf.conf, then run the following
+commands in this projects root folder:
+
+```bash
+mkdir testbuild && cd testbuild
+cmake -GNinja -DTESTS=ON ..
+ninja flash
+```
+Test output can be examined via screen afterwards.
