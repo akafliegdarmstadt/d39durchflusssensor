@@ -1,6 +1,7 @@
 #include "nmea.h"
 #include "string.h"
 #include "stdio.h"
+#include <sys/cbprintf.h>
 
 /* build nmea message for fuel flow sensor */
 void nmeaflow_buildmsg(char *buf, double val) {
