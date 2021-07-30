@@ -14,7 +14,7 @@ void nmeaflow_buildmsg(char *buf, double val) {
     uint8_t cs = nmeaflow_checksum(val_str, 0, strlen(val_str), PFLO_CS_SEED);
 
     // build complete msg
-    snprintfcb(buf, 15, "$PFLO,%s*%2X\n", val_str, cs);
+    snprintfcb(buf, 16, "$PFLO,%s*%2X\n", val_str, cs);
 }
 
 /* Calculate Checksum based on sequential XOR operations */
