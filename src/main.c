@@ -113,16 +113,16 @@ void handle_timer(struct k_timer *dummy) {
 	int pin_in_val = gpio_pin_get_raw(gpio0, SENS_PIN);
 
 	double flow_rate = atomic_get(&interrupt_count) / 8012.0;
-	char buf[20];
+	char buf[17] = "";
 
-	nmeaflow_buildmsg(&buf, flow_rate);
+	nmeaflow_buildmsg(buf, flow_rate);
 
 	printk("Update - %d (%d)\n", pin_in_val, atomic_get(&interrupt_count));
 
 	atomic_set(&interrupt_count, (atomic_val_t)0);
 	
 	if (notify_enable) {
-		bt_gatt_notify(NULL, &d39fuelsensor_svc.attrs[1], &buf, sizeof(buf));
+		bt_gatt_notify(NULL, &d39fuelsensor_svc.attrs[1], &buf, 15);
 	}
 	
 }
@@ -140,7 +140,7 @@ const struct device *initialize_gpio() {
 		return NULL;
 	}
 
-	ret = gpio_pin_configure(gpio0, SENS_PIN, GPIO_INPUT | GPIO_PULL_DOWN | GPIO_INT_DEBOUNCE);
+	ret = gpio_pin_configure(gpio0, SENS_PIN, GPIO_INPUT | GPIO_PULL_DOWN);
 	if(ret) {
 		printk("Failed to configure GPIO input (%d).", ret);
 		return NULL;
