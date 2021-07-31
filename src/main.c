@@ -21,7 +21,9 @@ LOG_MODULE_REGISTER(main, 3);
 #define SENSOR_THREAD_STACK_SIZE 500
 #define SENSOR_THREAD_PRIORITY 5
 
-#define SENS_PIN 4
+#define SENS_PIN 5
+
+#define TIKSCONF 8012.0
 
 // bluetooth
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
@@ -112,7 +114,7 @@ void main(void)
 void handle_timer(struct k_timer *dummy) {
 	int pin_in_val = gpio_pin_get_raw(gpio0, SENS_PIN);
 
-	double flow_rate = atomic_get(&interrupt_count) / 8012.0;
+	double flow_rate = atomic_get(&interrupt_count) / TIKSCONF;
 	char buf[17] = "";
 
 	nmeaflow_buildmsg(buf, flow_rate);
@@ -140,14 +142,21 @@ const struct device *initialize_gpio() {
 		return NULL;
 	}
 
-	ret = gpio_pin_configure(gpio0, SENS_PIN, GPIO_INPUT | GPIO_PULL_DOWN);
+	ret = gpio_pin_configure(gpio0, SENS_PIN, GPIO_INPUT | GPIO_PULL_UP);
 	if(ret) {
 		printk("Failed to configure GPIO input (%d).", ret);
 		return NULL;
 	}
 
-	if(gpio_pin_interrupt_configure(gpio0, SENS_PIN, GPIO_INT_TRIG_HIGH)) {
-		printk("Failed to configure GPIO interrupt.");
+	if(gpio_pin_interrupt_configure(gpio0, SENS_PIN, GPIO_INT_TRIG_LOW)) {
+		printk("Failed to configure GPIO interrupt.\n");
+		return NULL;
+	}
+
+	int pin_in_val = gpio_pin_get_raw(gpio0, SENS_PIN);
+
+	if (pin_in_val != 1) {
+		printk("Failed to pull gpio pin up.\n");
 		return NULL;
 	}
 
