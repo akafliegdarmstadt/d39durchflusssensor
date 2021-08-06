@@ -18,9 +18,6 @@
 LOG_MODULE_REGISTER(main, 3);
 
 /* CONFIGURATION */
-#define SENSOR_THREAD_STACK_SIZE 500
-#define SENSOR_THREAD_PRIORITY 5
-
 #define SENS_PIN 5
 
 #define TIKSCONF 8012.0
@@ -59,24 +56,25 @@ static const struct bt_data ad[] = {
 
 struct bt_conn *conn;
 uint32_t current_count = 0;
+
 /* Notification state */
 volatile bool notify_enable;
 
 static struct bt_uuid_128 service_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0x7067452c, 0x0513, 0x41a0, 0xa0bd, 0xb8582a217bb0)
-);
+	);
 
 static struct bt_uuid_128 characteristic_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0x0000FFE1, 0x0000, 0x1000, 0x8000, 0x00805F9B34FB)
-);
+	);
 
 BT_GATT_SERVICE_DEFINE(d39fuelsensor_svc,
-	BT_GATT_PRIMARY_SERVICE(&service_uuid),
-	BT_GATT_CHARACTERISTIC(&characteristic_uuid.uuid,
-				BT_GATT_CHRC_NOTIFY,
-				BT_GATT_PERM_READ, NULL, NULL, NULL),
-	BT_GATT_CCC(ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
-);
+		       BT_GATT_PRIMARY_SERVICE(&service_uuid),
+		       BT_GATT_CHARACTERISTIC(&characteristic_uuid.uuid,
+					      BT_GATT_CHRC_NOTIFY,
+					      BT_GATT_PERM_READ, NULL, NULL, NULL),
+		       BT_GATT_CCC(ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
+		       );
 
 static struct bt_conn_cb conn_callbacks = {
 	.connected = connected,
@@ -84,11 +82,11 @@ static struct bt_conn_cb conn_callbacks = {
 };
 
 /*
- * Entry Point 
+ * Entry Point
  */
 void main(void)
 {
-	if(initialize_gpio()==NULL) {
+	if (initialize_gpio() == NULL) {
 		printk("Failed to initialize GPIO");
 		return;
 	}
@@ -96,6 +94,7 @@ void main(void)
 	printk("Hello World! %s\n", CONFIG_BOARD);
 
 	int err = bt_enable(NULL);
+
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 		return;
@@ -108,55 +107,50 @@ void main(void)
 	k_timer_start(&update_timer, K_SECONDS(1), K_SECONDS(1));
 }
 
-/* 
- * Reset Tick counter and send update. 
+/*
+ * Reset Tick counter and send update.
  */
-void handle_timer(struct k_timer *dummy) {
+void handle_timer(struct k_timer *dummy)
+{
 	int pin_in_val = gpio_pin_get_raw(gpio0, SENS_PIN);
 
 	double flow_rate = atomic_get(&interrupt_count) / TIKSCONF;
-	char buf[17] = "";
+	char buf[NMEA_LENGTH] = "";
 
 	nmeaflow_buildmsg(buf, flow_rate);
 
-	printk("Update - %d (%d)\n", pin_in_val, atomic_get(&interrupt_count));
+	printk("Update - %d (%d), %s\n", pin_in_val, atomic_get(&interrupt_count), buf);
 
 	atomic_set(&interrupt_count, (atomic_val_t)0);
-	
+
 	if (notify_enable) {
 		bt_gatt_notify(NULL, &d39fuelsensor_svc.attrs[1], &buf, 15);
 	}
-	
+
 }
 
 /*
  * setup gpio0 SENS_PIN
  */
-const struct device *initialize_gpio() {
-	
+const struct device *initialize_gpio()
+{
+
 	int ret;
 
 	gpio0 = device_get_binding(DT_LABEL(DT_NODELABEL(gpio0)));
-	if (gpio0==NULL) {
+	if (gpio0 == NULL) {
 		printk("Could not get %s device\n", DT_LABEL(DT_NODELABEL(gpio0)));
 		return NULL;
 	}
 
 	ret = gpio_pin_configure(gpio0, SENS_PIN, GPIO_INPUT | GPIO_PULL_UP);
-	if(ret) {
+	if (ret) {
 		printk("Failed to configure GPIO input (%d).", ret);
 		return NULL;
 	}
 
-	if(gpio_pin_interrupt_configure(gpio0, SENS_PIN, GPIO_INT_TRIG_LOW)) {
+	if (gpio_pin_interrupt_configure(gpio0, SENS_PIN, GPIO_INT_TRIG_LOW)) {
 		printk("Failed to configure GPIO interrupt.\n");
-		return NULL;
-	}
-
-	int pin_in_val = gpio_pin_get_raw(gpio0, SENS_PIN);
-
-	if (pin_in_val != 1) {
-		printk("Failed to pull gpio pin up.\n");
 		return NULL;
 	}
 
@@ -169,14 +163,16 @@ const struct device *initialize_gpio() {
 /*
  * increase counter on each interrupt for SENS_PIN
  */
-void handle_tick(const struct device *dev, struct gpio_callback *cb, uint32_t pins) {
+void handle_tick(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
 	atomic_inc(&interrupt_count);
 }
 
-/* 
+/*
  * initialize bluetooth services
  */
-void bt_ready(int err) {
+void bt_ready(int err)
+{
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 		return;
@@ -217,7 +213,8 @@ static void disconnected(struct bt_conn *disconn, uint8_t reason)
 	printk("Disconnected (reason %u)", reason);
 }
 
-static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {
+static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
 	ARG_UNUSED(attr);
 	notify_enable = (value == BT_GATT_CCC_NOTIFY);
 }
