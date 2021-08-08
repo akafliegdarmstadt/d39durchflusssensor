@@ -40,6 +40,20 @@ ninja flash
 
 Otherwise the esp device path has to be set during build.
 
+## Alternative Flashing
+
+[esptool.py](https://github.com/espressif/esptool) can be used to flash the firmware. Install it by
+
+``` bash
+pip install esptool
+```
+
+and use the following command to flash our binary
+
+``` bash
+esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 write_flash -z 0x10000 zephyr.bin
+```
+
 ## Build and run tests
 
 Tests are contained in the subfolder test as separate zephyr application. By default this application runs on qemu-arm-m3. Build Instructions can be found in test/README.md.
