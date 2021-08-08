@@ -42,12 +42,4 @@ Otherwise the esp device path has to be set during build.
 
 ## Build and run tests
 
-Enable test specific parts of zephyr in prf.conf, then run the following
-commands in this projects root folder:
-
-```bash
-mkdir testbuild && cd testbuild
-cmake -GNinja -DTESTS=ON ..
-ninja flash
-```
-Test output can be examined via screen afterwards.
+Tests are contained in the subfolder test as separate zephyr application. By default this application runs on qemu-arm-m3. Build Instructions can be found in test/README.md.
