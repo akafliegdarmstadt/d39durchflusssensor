@@ -13,24 +13,15 @@
 #include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
 
-#include "nmea.h"
+#include "d39_nmea/nmea.h"
+#include "d39_gpio/d39_gpio.h"
 
 LOG_MODULE_REGISTER(main, 3);
 
 /* CONFIGURATION */
-#define SENS_PIN 5
-
-#define TIKSCONF 8012.0
-
-// bluetooth
-#define DEVICE_NAME CONFIG_BT_DEVICE_NAME
-#define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
-#define ADV_LEN 12
+#include "config.h"
 
 /* DECLARATIONS */
-const struct device *initialize_gpio();
-
-void handle_tick(const struct device *dev, struct gpio_callback *cb, uint32_t pins);
 void handle_timer(struct k_timer *dummy);
 
 void bt_ready(int err);
@@ -39,9 +30,6 @@ static void disconnected(struct bt_conn *disconn, uint8_t reason);
 static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value);
 
 /* GLOBALS */
-static struct gpio_callback tick_cb_data;
-const struct device *gpio0;
-
 // use atomic variable to circumvent semaphore/mutex and so on
 atomic_t interrupt_count;
 
@@ -86,22 +74,26 @@ static struct bt_conn_cb conn_callbacks = {
  */
 void main(void)
 {
-	if (initialize_gpio() == NULL) {
-		printk("Failed to initialize GPIO");
+	char *err = NULL;
+
+	d39_init_gpio(&err);
+	if (err) {
+		printk("ERROR: %s", err);
 		return;
 	}
 
 	printk("Hello World! %s\n", CONFIG_BOARD);
 
-	int err = bt_enable(NULL);
+	int _err = bt_enable(NULL);
 
-	if (err) {
+	if (_err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 		return;
+	} else {
+		printk("Bluetooth initialized");
 	}
 
-	bt_ready(err);
-
+	bt_ready(_err);
 	bt_conn_cb_register(&conn_callbacks);
 
 	k_timer_start(&update_timer, K_SECONDS(1), K_SECONDS(1));
@@ -112,76 +104,29 @@ void main(void)
  */
 void handle_timer(struct k_timer *dummy)
 {
-	int pin_in_val = gpio_pin_get_raw(gpio0, SENS_PIN);
+	char *err = NULL;
 
-	double flow_rate = atomic_get(&interrupt_count) / TIKSCONF;
+	// TODO: Should check err if atomic_get can fail.
+	const uint32_t ticks = d39_gpio_getticks(&err);
+	const double flow_rate = ticks / TIKSCONF;
+
 	char buf[NMEA_LENGTH] = "";
-
 	nmeaflow_buildmsg(buf, flow_rate);
 
-	printk("Update - %d (%d), %s\n", pin_in_val, atomic_get(&interrupt_count), buf);
-
-	atomic_set(&interrupt_count, (atomic_val_t)0);
+	printk("Update - ints: %d, %s\n", ticks, buf);
 
 	if (notify_enable) {
 		bt_gatt_notify(NULL, &d39fuelsensor_svc.attrs[1], &buf, 15);
 	}
-
-}
-
-/*
- * setup gpio0 SENS_PIN
- */
-const struct device *initialize_gpio()
-{
-
-	int ret;
-
-	gpio0 = device_get_binding(DT_LABEL(DT_NODELABEL(gpio0)));
-	if (gpio0 == NULL) {
-		printk("Could not get %s device\n", DT_LABEL(DT_NODELABEL(gpio0)));
-		return NULL;
-	}
-
-	ret = gpio_pin_configure(gpio0, SENS_PIN, GPIO_INPUT | GPIO_PULL_UP);
-	if (ret) {
-		printk("Failed to configure GPIO input (%d).", ret);
-		return NULL;
-	}
-
-	if (gpio_pin_interrupt_configure(gpio0, SENS_PIN, GPIO_INT_TRIG_LOW)) {
-		printk("Failed to configure GPIO interrupt.\n");
-		return NULL;
-	}
-
-	gpio_init_callback(&tick_cb_data, handle_tick, BIT(SENS_PIN));
-	gpio_add_callback(gpio0, &tick_cb_data);
-
-	return gpio0;
-}
-
-/*
- * increase counter on each interrupt for SENS_PIN
- */
-void handle_tick(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-	atomic_inc(&interrupt_count);
 }
 
 /*
  * initialize bluetooth services
  */
-void bt_ready(int err)
+void bt_ready()
 {
-	if (err) {
-		printk("Bluetooth init failed (err %d)\n", err);
-		return;
-	}
-
-	printk("Bluetooth initialized\n");
-
 	/* Start advertising */
-	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad),
+	int err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad),
 			      NULL, 0);
 	if (err) {
 		printk("Advertising failed to start (err %d)\n", err);
