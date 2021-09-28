@@ -2,6 +2,7 @@
 #include <drivers/gpio.h>
 
 #include "../config.h"
+#include "d39_gpio.h"
 
 static struct device *gpio0;
 static struct gpio_callback tick_cb_data;
