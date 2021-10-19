@@ -1,0 +1,4 @@
+/* CONFIGURATION */
+#define SENS_PIN 5
+
+#define TIKSCONF 8012.0

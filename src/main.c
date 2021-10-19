@@ -13,14 +13,12 @@
 #include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
 
+#include "d39_gpio/d39_gpio.h"
 #include "nmea.h"
+#include "config.h"
+
 
 LOG_MODULE_REGISTER(main, 3);
-
-/* CONFIGURATION */
-#define SENS_PIN 5
-
-#define TIKSCONF 8012.0
 
 // bluetooth
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
@@ -28,9 +26,6 @@ LOG_MODULE_REGISTER(main, 3);
 #define ADV_LEN 12
 
 /* DECLARATIONS */
-const struct device *initialize_gpio();
-
-void handle_tick(const struct device *dev, struct gpio_callback *cb, uint32_t pins);
 void handle_timer(struct k_timer *dummy);
 
 void bt_ready(int err);
@@ -38,12 +33,6 @@ static void connected(struct bt_conn *connected, uint8_t err);
 static void disconnected(struct bt_conn *disconn, uint8_t reason);
 static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value);
 
-/* GLOBALS */
-static struct gpio_callback tick_cb_data;
-const struct device *gpio0;
-
-// use atomic variable to circumvent semaphore/mutex and so on
-atomic_t interrupt_count;
 
 K_TIMER_DEFINE(update_timer, handle_timer, NULL);
 
@@ -86,8 +75,9 @@ static struct bt_conn_cb conn_callbacks = {
  */
 void main(void)
 {
-	if (initialize_gpio() == NULL) {
-		printk("Failed to initialize GPIO");
+	int ret = d39_gpio_init();
+	if (ret != 0) {
+		printk("Failed to initialize GPIO, error %d", ret);
 		return;
 	}
 
@@ -112,60 +102,17 @@ void main(void)
  */
 void handle_timer(struct k_timer *dummy)
 {
-	int pin_in_val = gpio_pin_get_raw(gpio0, SENS_PIN);
-
-	double flow_rate = atomic_get(&interrupt_count) / TIKSCONF;
+	uint32_t tiks = d39_gpio_get_and_reset_ticks();
+	double flow_rate =  tiks / TIKSCONF;
 	char buf[NMEA_LENGTH] = "";
 
 	nmeaflow_buildmsg(buf, flow_rate);
 
-	printk("Update - %d (%d), %s\n", pin_in_val, atomic_get(&interrupt_count), buf);
-
-	atomic_set(&interrupt_count, (atomic_val_t)0);
+	printk("Update - %d, %s\n", tiks, buf);
 
 	if (notify_enable) {
 		bt_gatt_notify(NULL, &d39fuelsensor_svc.attrs[1], &buf, 15);
 	}
-
-}
-
-/*
- * setup gpio0 SENS_PIN
- */
-const struct device *initialize_gpio()
-{
-
-	int ret;
-
-	gpio0 = device_get_binding(DT_LABEL(DT_NODELABEL(gpio0)));
-	if (gpio0 == NULL) {
-		printk("Could not get %s device\n", DT_LABEL(DT_NODELABEL(gpio0)));
-		return NULL;
-	}
-
-	ret = gpio_pin_configure(gpio0, SENS_PIN, GPIO_INPUT | GPIO_PULL_UP);
-	if (ret) {
-		printk("Failed to configure GPIO input (%d).", ret);
-		return NULL;
-	}
-
-	if (gpio_pin_interrupt_configure(gpio0, SENS_PIN, GPIO_INT_TRIG_LOW)) {
-		printk("Failed to configure GPIO interrupt.\n");
-		return NULL;
-	}
-
-	gpio_init_callback(&tick_cb_data, handle_tick, BIT(SENS_PIN));
-	gpio_add_callback(gpio0, &tick_cb_data);
-
-	return gpio0;
-}
-
-/*
- * increase counter on each interrupt for SENS_PIN
- */
-void handle_tick(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-	atomic_inc(&interrupt_count);
 }
 
 /*
