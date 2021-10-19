@@ -1,4 +1,9 @@
-/* CONFIGURATION */
+/* GPIO */
 #define SENS_PIN 5
+
+// BLUETOOTH
+#define DEVICE_NAME CONFIG_BT_DEVICE_NAME
+#define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
+#define ADV_LEN 12
 
 #define TIKSCONF 8012.0
