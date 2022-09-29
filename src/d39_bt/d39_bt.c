@@ -13,6 +13,8 @@ static void connected_cb(struct bt_conn *connected, uint8_t err);
 static void disconnected_cb(struct bt_conn *connected, uint8_t reason);
 static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value);
 
+static void passkey_entry_cb(struct bt_conn *connected);
+
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN)
@@ -45,6 +47,10 @@ static struct bt_conn_cb conn_callbacks = {
 	.disconnected = disconnected_cb,
 };
 
+static struct bt_conn_auth_cb auth_callbacks = {
+  .passkey_entry = passkey_entry_cb,
+};
+
 /**
  * Initializes the bluetooth driver and registers the callbacks.
  * @param err Gets set to an error message if an error occurrs.
@@ -65,6 +71,9 @@ void bt_ready(int err)
 		printk("Advertising failed to start (err %d)\n", err);
 		return;
 	}
+
+  bt_conn_cb_register(&conn_callbacks);
+  bt_conn_auth_cb_register(&auth_callbacks);
 
 	printk("Connection Callbacks registered\n");
 }
@@ -110,4 +119,11 @@ static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
 	ARG_UNUSED(attr);
 	notify_enable = (value == BT_GATT_CCC_NOTIFY);
+}
+
+static void passkey_entry_cb(struct bt_conn* conn) {
+  // don't query the user to enter a passkey on the esp32, since that is impossible
+  // always respond with BT_CONN_AUTH_PASSKEY (defined in d39_bt.h) so every peer
+  // device will have to enter the same code
+  bt_conn_auth_passkey_entry(conn, BT_CONN_AUTH_PASSKEY);
 }
